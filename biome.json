@@ -1,0 +1,116 @@
+{
+  "$schema": "https://biomejs.dev/schemas/2.6.8/schema.json",
+  "files": {
+    "ignoreUnknown": true,
+    "includes": [
+      "**",
+      "!!**/node_modules",
+      "!!**/dist",
+      "!!**/public",
+      "!!**/tools",
+      "!!**/work",
+      "!!**/outputs",
+      "!!**/test-results",
+      "!!**/playwright-report",
+      "!!**/src/infrastructure/export/scorm-2004-schemas",
+      "!**/*.tsbuildinfo",
+      "!**/package-lock.json",
+      "!**/bun.lockb"
+    ]
+  },
+  "formatter": {
+    "enabled": true,
+    "indentStyle": "space",
+    "indentWidth": 2,
+    "lineWidth": 100,
+    "lineEnding": "lf"
+  },
+  "javascript": {
+    "formatter": {
+      "quoteStyle": "single",
+      "jsxQuoteStyle": "double",
+      "semicolons": "asNeeded",
+      "trailingCommas": "all",
+      "arrowParentheses": "always"
+    }
+  },
+  "css": {
+    "parser": {
+      "tailwindDirectives": true
+    }
+  },
+  "assist": {
+    "enabled": true,
+    "actions": {
+      "source": {
+        "organizeImports": {
+          "level": "on",
+          "options": {
+            "groups": [
+              [":BUN:", ":NODE:"],
+              ":BLANK_LINE:",
+              ":PACKAGE:",
+              ":BLANK_LINE:",
+              ":ALIAS:",
+              ":BLANK_LINE:",
+              ":PATH:"
+            ]
+          }
+        }
+      }
+    }
+  },
+  "linter": {
+    "enabled": true,
+    "rules": {
+      "preset": "recommended",
+      "correctness": {
+        "noUnusedImports": "error",
+        "noUnusedVariables": "error",
+        "noUnusedFunctionParameters": "error",
+        "useExhaustiveDependencies": "error",
+        "useHookAtTopLevel": "error"
+      },
+      "style": {
+        "useConst": "error",
+        "useImportType": "error",
+        "useFilenamingConvention": {
+          "level": "error",
+          "options": {
+            "filenameCases": ["kebab-case"],
+            "requireAscii": true
+          }
+        }
+      },
+      "suspicious": {
+        "noVar": "error",
+        "noDoubleEquals": "error"
+      },
+      "a11y": {
+        "useButtonType": "error"
+      }
+    }
+  },
+  "overrides": [
+    {
+      "includes": ["tests/editor.e2e.ts", "src/infrastructure/scorm/session.ts"],
+      "linter": {
+        "rules": {
+          "correctness": {
+            "noComponentHookFactories": "off"
+          }
+        }
+      }
+    },
+    {
+      "includes": ["src/content/media-blocks.tsx", "src/content/components/media.tsx"],
+      "linter": {
+        "rules": {
+          "a11y": {
+            "useMediaCaption": "off"
+          }
+        }
+      }
+    }
+  ]
+}
