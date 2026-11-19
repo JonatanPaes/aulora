@@ -43,7 +43,7 @@ async function upload(page: Page, buffer = courseZip()) {
 
 async function openCourse(page: Page) {
   await upload(page)
-  await page.getByRole('button', { name: 'Abrir curso' }).click()
+  await page.getByRole('button', { name: /(?:Come.ar|Continuar|Revisar) curso/ }).click()
   await expect(
     page.frameLocator('iframe').getByRole('heading', { name: 'Primeira aula' }),
   ).toBeVisible()
@@ -65,7 +65,11 @@ test('importa, troca de aula sem Commit, retoma e remove o curso', async ({ page
   await page.getByRole('button', { name: 'Biblioteca', exact: true }).click()
   await expect(page.getByText('1 de 2 aulas concluídas')).toBeVisible()
   await page.reload()
-  await page.getByRole('button', { name: 'Abrir curso' }).click()
+  await page.getByRole('button', { name: /(?:Come.ar|Continuar|Revisar) curso/ }).click()
+  await expect(
+    page.frameLocator('iframe').getByRole('heading', { name: 'Segunda aula' }),
+  ).toBeVisible()
+  await page.getByRole('button', { name: 'Primeira aula', exact: true }).click()
   await expect(page.frameLocator('iframe').locator('#saved')).toHaveText('retomar-aqui')
   await page.getByRole('button', { name: 'Aulora, voltar à biblioteca' }).click()
   page.once('dialog', (dialog) => dialog.accept())
@@ -83,7 +87,11 @@ test('salva alterações pendentes ao recarregar a página', async ({ page }) =>
   await openCourse(page)
   await page.frameLocator('iframe').getByRole('button', { name: 'Alterar progresso' }).click()
   await page.reload()
-  await page.getByRole('button', { name: 'Abrir curso' }).click()
+  await page.getByRole('button', { name: /(?:Come.ar|Continuar|Revisar) curso/ }).click()
+  await expect(
+    page.frameLocator('iframe').getByRole('heading', { name: 'Segunda aula' }),
+  ).toBeVisible()
+  await page.getByRole('button', { name: 'Primeira aula', exact: true }).click()
   await expect(page.frameLocator('iframe').locator('#saved')).toHaveText('retomar-aqui')
 })
 
@@ -154,15 +162,21 @@ for (const raw of ['{', '{}', '{"version":99,"courses":[]}', '[{"id":"invalid"}]
 
 test('catálogo legado permanece legível e migra na próxima gravação', async ({ page }) => {
   await upload(page)
-  await expect(page.getByRole('button', { name: 'Abrir curso' })).toBeVisible()
+  await expect(
+    page.getByRole('button', { name: /(?:Come.ar|Continuar|Revisar) curso/ }),
+  ).toBeVisible()
   await page.evaluate(() => {
     const saved = JSON.parse(localStorage.getItem('aulora.catalog') || '{}')
     localStorage.setItem('aulora.catalog', JSON.stringify(saved.courses))
   })
   await page.reload()
-  await expect(page.getByRole('button', { name: 'Abrir curso' })).toBeVisible()
+  await expect(
+    page.getByRole('button', { name: /(?:Come.ar|Continuar|Revisar) curso/ }),
+  ).toBeVisible()
   await upload(page)
-  await expect(page.getByRole('button', { name: 'Abrir curso' })).toHaveCount(2)
+  await expect(
+    page.getByRole('button', { name: /(?:Come.ar|Continuar|Revisar) curso/ }),
+  ).toHaveCount(2)
   expect(
     await page.evaluate(() => JSON.parse(localStorage.getItem('aulora.catalog') || '{}').version),
   ).toBe(1)
@@ -170,14 +184,16 @@ test('catálogo legado permanece legível e migra na próxima gravação', async
 
 test('progresso corrompido bloqueia a execução sem sobrescrever os dados', async ({ page }) => {
   await upload(page)
-  await expect(page.getByRole('button', { name: 'Abrir curso' })).toBeVisible()
+  await expect(
+    page.getByRole('button', { name: /(?:Come.ar|Continuar|Revisar) curso/ }),
+  ).toBeVisible()
   const key = await page.evaluate(() => {
     const course = JSON.parse(localStorage.getItem('aulora.catalog') || '{}').courses[0]
     const key = `aulora.progress.${course.id}.one`
     localStorage.setItem(key, '{"cmi.suspend_data":42}')
     return key
   })
-  await page.getByRole('button', { name: 'Abrir curso' }).click()
+  await page.getByRole('button', { name: /(?:Come.ar|Continuar|Revisar) curso/ }).click()
   await expect(page.getByRole('alert')).toContainText('Progresso local inválido')
   expect(await page.evaluate((key) => localStorage.getItem(key), key)).toBe(
     '{"cmi.suspend_data":42}',
@@ -222,8 +238,8 @@ test('limites de tamanho comprimido, entradas, manifesto, arquivo e total', asyn
   for (const limit of ['zipBytes', 'entries', 'manifestBytes', 'fileBytes', 'totalBytes']) {
     const error = await page.evaluate(
       async ({ bytes, limit }) => {
-        const limitsUrl = '/src/zip-limits.ts'
-        const packagesUrl = '/src/packages.ts'
+        const limitsUrl = '/src/infrastructure/scorm/zip-limits.ts'
+        const packagesUrl = '/src/infrastructure/scorm/package-importer.ts'
         const { importLimits } = await import(limitsUrl)
         const { importCourse } = await import(packagesUrl)
         const previous = importLimits[limit]
@@ -276,7 +292,7 @@ test('runtime 2004 informa falha, permite nova tentativa e retoma suspend_data',
   page,
 }) => {
   const result = await page.evaluate(async () => {
-    const runtimeUrl = '/src/runtime.ts'
+    const runtimeUrl = '/src/domain/scorm/runtime.ts'
     const { createRuntime } = await import(runtimeUrl)
     let fail = true
     let saved: Record<string, string> = {}
@@ -317,4 +333,198 @@ test('runtime 2004 informa falha, permite nova tentativa e retoma suspend_data',
     entry: 'resume',
     data: 'bookmark',
   })
+})
+
+test('continua na última aula pendente e oferece revisão ao concluir todas', async ({ page }) => {
+  await openCourse(page)
+  await page.getByRole('button', { name: 'Segunda aula', exact: true }).click()
+  await expect(
+    page.frameLocator('iframe').getByRole('heading', { name: 'Segunda aula' }),
+  ).toBeVisible()
+  await page.getByRole('button', { name: 'Biblioteca', exact: true }).click()
+  await expect(page.getByRole('article')).toContainText('Em andamento')
+  await expect(page.getByRole('article')).toContainText('Segunda aula')
+  await page.reload()
+  await page.getByRole('button', { name: 'Continuar curso' }).click()
+  await expect(
+    page.frameLocator('iframe').getByRole('heading', { name: 'Segunda aula' }),
+  ).toBeVisible()
+  await page.frameLocator('iframe').getByRole('button', { name: 'Alterar progresso' }).click()
+  await page.getByRole('button', { name: 'Biblioteca', exact: true }).click()
+  await expect(page.getByRole('article').getByRole('progressbar')).toHaveAttribute('value', '1')
+  await page.getByRole('button', { name: 'Continuar curso' }).click()
+  await expect(
+    page.frameLocator('iframe').getByRole('heading', { name: 'Primeira aula' }),
+  ).toBeVisible()
+  await page.frameLocator('iframe').getByRole('button', { name: 'Alterar progresso' }).click()
+  await page.getByRole('button', { name: 'Biblioteca', exact: true }).click()
+  await expect(page.getByRole('article')).toContainText('100%')
+  await page.getByRole('button', { name: 'Revisar curso' }).click()
+  await expect(
+    page.frameLocator('iframe').getByRole('heading', { name: 'Primeira aula' }),
+  ).toBeVisible()
+})
+
+test('mostra nota zero e reprovação sem inventar resultados para outras aulas', async ({
+  page,
+}) => {
+  await openCourse(page)
+  await page.evaluate(() => {
+    const api = (
+      window as unknown as {
+        API: {
+          LMSSetValue: (key: string, value: string) => string
+          LMSCommit: (arg: string) => string
+        }
+      }
+    ).API
+    api.LMSSetValue('cmi.core.score.raw', '0')
+    api.LMSSetValue('cmi.core.score.min', '0')
+    api.LMSSetValue('cmi.core.score.max', '100')
+    api.LMSSetValue('cmi.core.lesson_status', 'failed')
+    api.LMSCommit('')
+  })
+  await page.locator('.course-results > summary').click()
+  const row = page
+    .getByRole('row')
+    .filter({ has: page.getByRole('rowheader', { name: 'Primeira aula' }) })
+  await expect(row).toContainText('0 de 100')
+  await expect(row).toContainText('Reprovada')
+  const other = page
+    .getByRole('row')
+    .filter({ has: page.getByRole('rowheader', { name: 'Segunda aula' }) })
+  await expect(other.getByRole('cell').nth(1)).toHaveText('Não informada')
+  await expect(other.getByRole('cell').nth(2)).toHaveText('Não informada')
+  await page.getByRole('button', { name: 'Biblioteca', exact: true }).click()
+  await expect(page.getByRole('article')).toContainText('1 com nota · 0 aprovadas · 1 reprovadas')
+})
+
+test('SCORM 2004 distingue aprovação de conclusão e preserva escalas de notas', async ({
+  page,
+}) => {
+  const results = await page.evaluate(async () => {
+    const url = '/src/domain/course-progress.ts'
+    const { lessonResult } = await import(url)
+    return [
+      lessonResult(
+        {
+          'cmi.success_status': 'passed',
+          'cmi.completion_status': 'incomplete',
+          'cmi.score.scaled': '0.85',
+        },
+        true,
+      ),
+      lessonResult(
+        {
+          'cmi.completion_status': 'completed',
+          'cmi.score.raw': '0',
+          'cmi.score.min': '-10',
+          'cmi.score.max': '10',
+        },
+        true,
+      ),
+      lessonResult({ 'cmi.score.raw': 'NaN', 'cmi.score.scaled': '2' }, true),
+    ]
+  })
+  expect(results[0]).toMatchObject({
+    completed: false,
+    success: 'Aprovada',
+    score: '0,85 (escala de -1 a 1)',
+  })
+  expect(results[1]).toMatchObject({
+    completed: true,
+    success: 'Não informada',
+    score: '0 (mín. -10; máx. 10)',
+  })
+  expect(results[2].score).toBe('Não informada')
+})
+
+test('diagnóstico registra chamadas e exporta relatório sem valores de suspend_data', async ({
+  page,
+}) => {
+  await openCourse(page)
+  await page.frameLocator('iframe').getByRole('button', { name: 'Alterar progresso' }).click()
+  await page.locator('.scorm-diagnostics > summary').click()
+  const panel = page.locator('.scorm-diagnostics')
+  await expect(panel).toContainText('Inicializada')
+  await expect(panel.getByRole('region', { name: 'Eventos SCORM' })).toContainText('LMSInitialize')
+  await expect(panel.getByRole('region', { name: 'Eventos SCORM' })).toContainText(
+    'cmi.suspend_data',
+  )
+  await expect(panel).not.toContainText('retomar-aqui')
+  const downloadPromise = page.waitForEvent('download')
+  await panel.getByRole('button', { name: 'Exportar diagnóstico' }).click()
+  const download = await downloadPromise
+  expect(download.suggestedFilename()).toBe('aulora-diagnostico-scorm.json')
+  const stream = await download.createReadStream()
+  const chunks: Buffer[] = []
+  for await (const chunk of stream) chunks.push(Buffer.from(chunk))
+  const report = Buffer.concat(chunks).toString('utf8')
+  expect(report).toContain('LMSSetValue')
+  expect(report).not.toContain('retomar-aqui')
+})
+
+test('diagnóstico sinaliza conteúdo que não inicializa a API', async ({ page }) => {
+  const zip = new JSZip()
+    .file('imsmanifest.xml', manifest)
+    .file('one.html', '<h1>Sem comunicação SCORM</h1>')
+    .file('two.html', '<h1>Segunda</h1>')
+  await upload(page, zip.generateAsync({ type: 'nodebuffer' }))
+  await page.getByRole('button', { name: 'Começar curso' }).click()
+  await expect(
+    page.frameLocator('iframe').getByRole('heading', { name: 'Sem comunicação SCORM' }),
+  ).toBeVisible()
+  await page.locator('.scorm-diagnostics > summary').click()
+  await expect(page.locator('.scorm-diagnostics')).toContainText('ainda não chamou a inicialização')
+})
+
+test('diagnóstico informa arquivo da aula ausente', async ({ page }) => {
+  await upload(page)
+  await expect(page.getByRole('button', { name: 'Começar curso' })).toBeVisible()
+  await page.evaluate(async () => {
+    for (const key of await caches.keys()) await caches.delete(key)
+  })
+  await page.getByRole('button', { name: 'Começar curso' }).click()
+  await expect(page.getByRole('alert')).toContainText('HTTP 404')
+  await page.locator('.scorm-diagnostics > summary').click()
+  await expect(page.locator('.scorm-diagnostics')).toContainText('HTTP 404')
+})
+
+test('registro do runtime mantém apenas 200 eventos e preserva códigos de erro', async ({
+  page,
+}) => {
+  const result = await page.evaluate(async () => {
+    const url = '/src/domain/scorm/runtime.ts'
+    const { createRuntime } = await import(url)
+    const runtime = createRuntime({}, () => false, false)
+    const api = runtime.scorm12
+    api.LMSSetValue('cmi.suspend_data', 'segredo')
+    const early = runtime.snapshot().events[0]
+    api.LMSInitialize('')
+    for (let i = 0; i < 250; i++) api.LMSSetValue('cmi.suspend_data', 'segredo')
+    api.LMSCommit('')
+    return { early, snapshot: runtime.snapshot() }
+  })
+  expect(result.early.error).toBe('301')
+  expect(result.snapshot.events).toHaveLength(200)
+  expect(result.snapshot.error).toBe('101')
+  expect(result.snapshot.dirty).toBe(true)
+  expect(JSON.stringify(result)).not.toContain('segredo')
+})
+
+test('remoção parcial mantém a interface alinhada ao catálogo salvo', async ({ page }) => {
+  await upload(page)
+  await expect(page.getByRole('button', { name: 'Começar curso' })).toBeVisible()
+  await page.evaluate(() => {
+    CacheStorage.prototype.delete = async () => {
+      throw new Error('Cache indisponível')
+    }
+  })
+  page.once('dialog', (dialog) => dialog.accept())
+  await page.getByRole('button', { name: 'Remover Curso de teste' }).click()
+  await expect(page.getByRole('alert')).toContainText('Não foi possível concluir a remoção')
+  await expect(page.getByText('Sua biblioteca começa aqui.')).toBeVisible()
+  expect(
+    await page.evaluate(() => JSON.parse(localStorage.getItem('aulora.catalog') || '{}').courses),
+  ).toEqual([])
 })

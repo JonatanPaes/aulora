@@ -1,7 +1,7 @@
 import { createRoot } from 'react-dom/client'
 
-import { Library } from './library'
-import './styles.css'
+import { App } from './app/app'
+import './app/styles.css'
 
 const root = document.getElementById('root')
-if (root) createRoot(root).render(<Library />)
+if (root) createRoot(root).render(<App />)
