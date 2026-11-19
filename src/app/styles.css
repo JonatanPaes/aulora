@@ -283,12 +283,20 @@
     color: var(--muted);
     background: var(--surface);
   }
+  .search-field:focus-within {
+    border-color: var(--focus);
+    box-shadow: 0 0 0 1px var(--focus);
+    color: var(--link);
+  }
   .search-field input {
     min-width: 0;
     width: 180px;
     background: transparent;
     color: var(--foreground);
     font-size: 12px;
+  }
+  .search-field input:focus-visible {
+    outline: none;
   }
   .empty-state {
     display: flex;
